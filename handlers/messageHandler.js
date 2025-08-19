@@ -13,19 +13,21 @@ class MessageHandler {
     async handleMessage(message, topupHandler) {
         try {
             const { from, body } = message;
-            const command = body.trim().toUpperCase();
+            const command = body.trim();
             
             logger.info(`📨 Processing message from ${from}: ${body}`);
             
-            // Check if it's a command
-            if (command.startsWith('TOPUP ')) {
+            // Check if it's a command (support both with and without slash)
+            if (command.startsWith('/TOPUP ') || command.startsWith('TOPUP ')) {
                 return await this.handleTopupCommand(message, topupHandler);
-            } else if (command === 'SALDO') {
+            } else if (command === '/SALDO' || command === 'SALDO' || command === '/BALANCE' || command === 'BALANCE') {
                 return await this.handleBalanceCommand(message, topupHandler);
-            } else if (command === 'HELP') {
+            } else if (command === '/HELP' || command === 'HELP' || command === '/help') {
                 return await this.handleHelpCommand(message);
-            } else if (command === 'INFO') {
+            } else if (command === '/INFO' || command === 'INFO' || command === '/info') {
                 return await this.handleInfoCommand(message);
+            } else if (command === '/TOPUP' || command === 'TOPUP') {
+                return await this.handleTopupInfoCommand(message);
             } else {
                 // Unknown command
                 return await this.handleUnknownCommand(message);
@@ -212,6 +214,33 @@ class MessageHandler {
         }
     }
 
+    async handleTopupInfoCommand(message) {
+        try {
+            const topupInfoMessage = `💰 *TOP-UP SALDO*\n\n` +
+                `📋 Format: \`/topup <jumlah>\`\n` +
+                `💡 Contoh: \`/topup 50000\`\n\n` +
+                `💳 Metode Pembayaran:\n` +
+                `• Bank Transfer\n` +
+                `• E-Wallet\n` +
+                `• QRIS\n\n` +
+                `⚠️ Minimal: Rp 1.000\n` +
+                `⚠️ Maksimal: Rp 10.000.000\n\n` +
+                `🔍 Ketik \`/help\` untuk bantuan lengkap`;
+            
+            return {
+                success: true,
+                message: topupInfoMessage
+            };
+            
+        } catch (error) {
+            logger.error('❌ Error handling topup info command:', error);
+            return {
+                success: false,
+                error: 'Terjadi kesalahan saat menampilkan info top-up'
+            };
+        }
+    }
+
     async handleUnknownCommand(message) {
         try {
             const { body } = message;
@@ -219,11 +248,11 @@ class MessageHandler {
             const unknownMessage = `❓ *COMMAND TIDAK DIKENAL*\n\n` +
                 `Pesan: "${body}"\n\n` +
                 `*Commands yang tersedia:*\n` +
-                `• TOPUP <jumlah> - Top-up saldo\n` +
-                `• SALDO - Cek saldo\n` +
-                `• HELP - Bantuan\n` +
-                `• INFO - Informasi bot\n\n` +
-                `Ketik *HELP* untuk melihat bantuan lengkap.`;
+                `• /topup <jumlah> - Top-up saldo\n` +
+                `• /saldo - Cek saldo\n` +
+                `• /help - Bantuan\n` +
+                `• /info - Informasi bot\n\n` +
+                `Ketik */help* untuk melihat bantuan lengkap.`;
             
             return {
                 success: false,
