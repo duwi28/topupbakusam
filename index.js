@@ -202,11 +202,27 @@ class WhatsAppBot extends EventEmitter {
             
             // Handle different message types
             if (type === 'chat' && body) {
-                await this.messageHandler.handleMessage(message, this.topupHandler);
+                const response = await this.messageHandler.handleMessage(message, this.topupHandler);
+                
+                // Send response back to user
+                if (response && response.success) {
+                    await this.whatsappService.sendMessage(from, response.message);
+                    this.logger.success(`✅ Response sent to ${from}`);
+                } else if (response && !response.success) {
+                    const errorMessage = `❌ ${response.error}`;
+                    await this.whatsappService.sendMessage(from, errorMessage);
+                    this.logger.warn(`⚠️ Error response sent to ${from}: ${response.error}`);
+                }
             }
             
         } catch (error) {
             this.logger.error('❌ Error handling incoming message:', error);
+            // Send error message to user
+            try {
+                await this.whatsappService.sendMessage(message.from, '❌ Terjadi kesalahan sistem, silakan coba lagi');
+            } catch (sendError) {
+                this.logger.error('❌ Failed to send error message:', sendError);
+            }
         }
     }
 
