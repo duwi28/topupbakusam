@@ -37,11 +37,18 @@ class WhatsAppService extends EventEmitter {
             const { version } = await fetchLatestBaileysVersion();
             this.logger.info(`📱 Versi Baileys: ${version.join('.')}`);
             
+            // Force fresh connection by clearing old session
+            if (fs.existsSync(this.authFolder)) {
+                fs.rmSync(this.authFolder, { recursive: true, force: true });
+                this.logger.info('🗑️ Session lama dihapus untuk force fresh connection');
+            }
+            fs.mkdirSync(this.authFolder, { recursive: true });
+            
             const { state, saveCreds } = await useMultiFileAuthState(this.authFolder);
             
             this.client = makeWASocket({
                 version,
-                printQRInTerminal: true,
+                printQRInTerminal: false, // Disable deprecated option
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, this.logger),
@@ -53,6 +60,8 @@ class WhatsAppService extends EventEmitter {
                 generateHighQualityLinkPreview: true,
                 markOnlineOnConnect: false,
                 retryRequestDelayMs: 250,
+                keepAliveIntervalMs: 25_000,
+                emitOwnEvents: false,
             });
 
             // Setup event handlers
@@ -77,12 +86,18 @@ class WhatsAppService extends EventEmitter {
         this.client.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
             
-            console.log('🔄 Connection Update Event:', { connection, qr: qr ? 'QR Available' : 'No QR' });
+            console.log('🔄 Connection Update Event:', { 
+                connection, 
+                qr: qr ? 'QR Available' : 'No QR',
+                timestamp: new Date().toLocaleTimeString()
+            });
             
             if (qr) {
                 this.qrCode = qr;
+                this.connectionAttempts = 0; // Reset attempts on QR
                 this.logger.info('📱 QR Code tersedia, silakan scan');
                 console.log('📱 QR Code Data:', qr.substring(0, 50) + '...');
+                console.log('📱 Silakan scan QR code di bawah ini:');
                 qrcode.generate(qr, { small: true });
             }
             

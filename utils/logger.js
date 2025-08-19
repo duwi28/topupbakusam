@@ -90,6 +90,25 @@ class Logger {
         }
     }
 
+    trace(message, data = null) {
+        if (process.env.NODE_ENV === 'development') {
+            const formattedMessage = this.formatMessage('TRACE', message, data);
+            console.log(`🔍 ${formattedMessage}`);
+            this.writeToFile('TRACE', message, data);
+        }
+    }
+
+    fatal(message, data = null) {
+        const formattedMessage = this.formatMessage('FATAL', message, data);
+        console.error(`💀 ${formattedMessage}`);
+        this.writeToFile('FATAL', message, data);
+    }
+
+    silent(message, data = null) {
+        // Silent logging - hanya write ke file, tidak console
+        this.writeToFile('SILENT', message, data);
+    }
+
     // Log khusus untuk transaksi
     transaction(type, driverName, amount, status, transactionId = null) {
         const message = `Transaksi ${type} - Driver: ${driverName}, Jumlah: Rp ${amount.toLocaleString('id-ID')}, Status: ${status}`;
