@@ -42,6 +42,7 @@ class WhatsAppService extends EventEmitter {
                 const sessionFiles = fs.readdirSync(this.authFolder);
                 if (sessionFiles.length > 0) {
                     this.logger.info('📁 Session ditemukan, mencoba menggunakan session yang ada...');
+                    this.logger.info(`📁 Files: ${sessionFiles.join(', ')}`);
                 } else {
                     this.logger.info('📁 Folder session kosong, akan membuat session baru');
                 }
@@ -51,6 +52,13 @@ class WhatsAppService extends EventEmitter {
             }
             
             const { state, saveCreds } = await useMultiFileAuthState(this.authFolder);
+            
+            // Check if we have valid credentials
+            if (state.creds.registered) {
+                this.logger.info('✅ Credentials valid, session akan digunakan');
+            } else {
+                this.logger.info('⚠️ Credentials tidak valid, akan generate QR baru');
+            }
             
             this.client = makeWASocket({
                 version,
@@ -142,6 +150,7 @@ class WhatsAppService extends EventEmitter {
                     return;
                 }
                 
+                // Check if it's a temporary disconnect (not logout)
                 if (shouldReconnect && this.connectionAttempts < this.maxReconnectAttempts) {
                     this.connectionAttempts++;
                     this.logger.warn(`🔄 Mencoba reconnect... (${this.connectionAttempts}/${this.maxReconnectAttempts})`);
@@ -153,10 +162,14 @@ class WhatsAppService extends EventEmitter {
                     this.logger.error('❌ Koneksi WhatsApp terputus permanen');
                     this.isConnected = false;
                     
-                    // Clear session if max attempts reached
-                    if (fs.existsSync(this.authFolder)) {
-                        fs.rmSync(this.authFolder, { recursive: true, force: true });
-                        this.logger.info('🗑️ Max reconnect attempts reached, session dihapus');
+                    // Only clear session if it's a permanent failure, not temporary disconnect
+                    if (this.connectionAttempts >= this.maxReconnectAttempts) {
+                        if (fs.existsSync(this.authFolder)) {
+                            fs.rmSync(this.authFolder, { recursive: true, force: true });
+                            this.logger.info('🗑️ Max reconnect attempts reached, session dihapus');
+                        }
+                    } else {
+                        this.logger.info('💾 Session dipertahankan untuk reconnect');
                     }
                     
                     this.emit('disconnected');
@@ -363,6 +376,16 @@ class WhatsAppService extends EventEmitter {
     async start() {
         try {
             this.logger.info('🚀 Starting WhatsApp service...');
+            
+            // Check session validity before starting
+            const sessionStatus = await this.checkSessionValidity();
+            if (sessionStatus.valid) {
+                this.logger.info('💾 Session valid ditemukan, akan menggunakan session yang ada');
+                this.logger.info(`📁 Session files: ${sessionStatus.files.join(', ')}`);
+            } else {
+                this.logger.info(`⚠️ Session tidak valid: ${sessionStatus.reason}`);
+            }
+            
             const success = await this.init();
             if (success) {
                 this.logger.success('✅ WhatsApp service started successfully');
@@ -391,8 +414,37 @@ class WhatsAppService extends EventEmitter {
             isConnected: this.isConnected,
             qrCode: this.qrCode,
             connectionAttempts: this.connectionAttempts,
-            client: this.client ? 'initialized' : 'not_initialized'
+            client: this.client ? 'initialized' : 'not_initialized',
+            sessionExists: fs.existsSync(this.authFolder),
+            sessionFiles: fs.existsSync(this.authFolder) ? fs.readdirSync(this.authFolder) : []
         };
+    }
+
+    async checkSessionValidity() {
+        try {
+            if (!fs.existsSync(this.authFolder)) {
+                return { valid: false, reason: 'Session folder tidak ada' };
+            }
+            
+            const sessionFiles = fs.readdirSync(this.authFolder);
+            if (sessionFiles.length === 0) {
+                return { valid: false, reason: 'Session folder kosong' };
+            }
+            
+            // Check for essential session files
+            const essentialFiles = ['creds.json', 'session-1'];
+            const hasEssentialFiles = essentialFiles.some(file => 
+                sessionFiles.some(sessionFile => sessionFile.includes(file))
+            );
+            
+            if (!hasEssentialFiles) {
+                return { valid: false, reason: 'File session tidak lengkap' };
+            }
+            
+            return { valid: true, files: sessionFiles };
+        } catch (error) {
+            return { valid: false, reason: `Error checking session: ${error.message}` };
+        }
     }
 
     async logout() {
