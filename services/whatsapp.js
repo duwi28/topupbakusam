@@ -128,6 +128,20 @@ class WhatsAppService extends EventEmitter {
             if (connection === 'close') {
                 const shouldReconnect = (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
                 
+                if (lastDisconnect?.error instanceof Boom && lastDisconnect.error.output?.statusCode === DisconnectReason.loggedOut) {
+                    this.logger.error('❌ WhatsApp logout, session expired');
+                    this.isConnected = false;
+                    
+                    // Clear session folder for fresh connection
+                    if (fs.existsSync(this.authFolder)) {
+                        fs.rmSync(this.authFolder, { recursive: true, force: true });
+                        this.logger.info('🗑️ Session expired, folder session dihapus');
+                    }
+                    
+                    this.emit('disconnected');
+                    return;
+                }
+                
                 if (shouldReconnect && this.connectionAttempts < this.maxReconnectAttempts) {
                     this.connectionAttempts++;
                     this.logger.warn(`🔄 Mencoba reconnect... (${this.connectionAttempts}/${this.maxReconnectAttempts})`);
@@ -138,6 +152,13 @@ class WhatsAppService extends EventEmitter {
                 } else {
                     this.logger.error('❌ Koneksi WhatsApp terputus permanen');
                     this.isConnected = false;
+                    
+                    // Clear session if max attempts reached
+                    if (fs.existsSync(this.authFolder)) {
+                        fs.rmSync(this.authFolder, { recursive: true, force: true });
+                        this.logger.info('🗑️ Max reconnect attempts reached, session dihapus');
+                    }
+                    
                     this.emit('disconnected');
                 }
             } else if (connection === 'open') {
