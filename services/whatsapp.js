@@ -62,6 +62,12 @@ class WhatsAppService extends EventEmitter {
                 retryRequestDelayMs: 250,
                 keepAliveIntervalMs: 25_000,
                 emitOwnEvents: false,
+                shouldIgnoreJid: (jid) => jid.includes('@broadcast'),
+                getMessage: async () => {
+                    return {
+                        conversation: 'Bot is ready'
+                    }
+                }
             });
 
             // Setup event handlers
@@ -99,6 +105,14 @@ class WhatsAppService extends EventEmitter {
                 console.log('📱 QR Code Data:', qr.substring(0, 50) + '...');
                 console.log('📱 Silakan scan QR code di bawah ini:');
                 qrcode.generate(qr, { small: true });
+                
+                // Clear QR after 2 minutes if not scanned
+                setTimeout(() => {
+                    if (this.qrCode === qr) {
+                        this.logger.warn('⏰ QR Code expired, generating new one...');
+                        this.qrCode = null;
+                    }
+                }, 120000); // 2 minutes
             }
             
             if (connection === 'close') {
@@ -121,6 +135,14 @@ class WhatsAppService extends EventEmitter {
                 this.isConnected = true;
                 this.connectionAttempts = 0;
                 this.qrCode = null;
+                
+                // Clear console and show success message
+                console.clear();
+                console.log('🎉 WhatsApp Bot berhasil terhubung! 🎉');
+                console.log('📱 Status: Online');
+                console.log('⏰ Connected at:', new Date().toLocaleString('id-ID'));
+                console.log('🚀 Bot siap menerima pesan...');
+                
                 this.emit('ready');
             }
         });
