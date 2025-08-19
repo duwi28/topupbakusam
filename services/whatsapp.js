@@ -37,12 +37,18 @@ class WhatsAppService extends EventEmitter {
             const { version } = await fetchLatestBaileysVersion();
             this.logger.info(`📱 Versi Baileys: ${version.join('.')}`);
             
-            // Force fresh connection by clearing old session
+            // Check if session exists and is valid
             if (fs.existsSync(this.authFolder)) {
-                fs.rmSync(this.authFolder, { recursive: true, force: true });
-                this.logger.info('🗑️ Session lama dihapus untuk force fresh connection');
+                const sessionFiles = fs.readdirSync(this.authFolder);
+                if (sessionFiles.length > 0) {
+                    this.logger.info('📁 Session ditemukan, mencoba menggunakan session yang ada...');
+                } else {
+                    this.logger.info('📁 Folder session kosong, akan membuat session baru');
+                }
+            } else {
+                fs.mkdirSync(this.authFolder, { recursive: true });
+                this.logger.info('📁 Folder session dibuat');
             }
-            fs.mkdirSync(this.authFolder, { recursive: true });
             
             const { state, saveCreds } = await useMultiFileAuthState(this.authFolder);
             
@@ -113,6 +119,10 @@ class WhatsAppService extends EventEmitter {
                         this.qrCode = null;
                     }
                 }, 120000); // 2 minutes
+            } else if (this.qrCode && !qr) {
+                // QR code cleared (scanned successfully)
+                this.logger.info('✅ QR Code berhasil di-scan, menunggu koneksi...');
+                this.qrCode = null;
             }
             
             if (connection === 'close') {
@@ -142,6 +152,7 @@ class WhatsAppService extends EventEmitter {
                 console.log('📱 Status: Online');
                 console.log('⏰ Connected at:', new Date().toLocaleString('id-ID'));
                 console.log('🚀 Bot siap menerima pesan...');
+                console.log('💾 Session tersimpan, restart tidak perlu scan ulang');
                 
                 this.emit('ready');
             }
